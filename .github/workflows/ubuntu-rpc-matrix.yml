@@ -43,9 +43,17 @@ jobs:
             grep -F "checking for rpc/xdr.h... yes" baseline.log
             grep -F "checking for library containing xdrmem_create... none required" baseline.log
             apt-get install -y --no-install-recommends libtirpc-dev
+          elif [ "${{ matrix.version }}" = "22.04" ]; then
+            test "$baseline_status" -eq 0
+            grep -F "checking for rpc/xdr.h... yes" baseline.log
+            grep -F "checking for library containing xdrmem_create... -ltirpc" baseline.log
+            grep -F "checking for yp_get_default_domain in -lnsl... yes" baseline.log
           else
             test "$baseline_status" -ne 0
             grep -F "cannot build volclava: missing rpc/xdr.h" baseline.log
+          fi
+
+          if [ "${{ matrix.version }}" != "20.04" ]; then
             apt-get install -y --no-install-recommends libnsl-dev
           fi
 
