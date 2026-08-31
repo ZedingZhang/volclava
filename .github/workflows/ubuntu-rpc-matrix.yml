@@ -51,6 +51,15 @@ jobs:
           else
             test "$baseline_status" -ne 0
             grep -F "cannot build volclava: missing rpc/xdr.h" baseline.log
+            apt-get install -y --no-install-recommends libtirpc-dev
+            rm -f config.cache
+            set +e
+            ./bootstrap.sh --prefix=/tmp/volclava-tirpc-only >tirpc-only.log 2>&1
+            tirpc_only_status=$?
+            set -e
+            cat tirpc-only.log
+            test "$tirpc_only_status" -ne 0
+            grep -F "configure: error: missing libnsl" tirpc-only.log
           fi
 
           if [ "${{ matrix.version }}" != "20.04" ]; then
