@@ -90,6 +90,9 @@ function pre_setup() {
     elif [ "$OS_NAME" = "ubuntu" ]; then
         apt update
         apt install -y build-essential automake tcl-dev libncurses-dev debhelper
+        if [ ! -f /usr/include/rpc/xdr.h ]; then
+            apt install -y libtirpc-dev libnsl-dev
+        fi
     else #CentOS
         yum install -y tcl-devel ncurses-devel
         yum groupinstall -y "Development Tools"

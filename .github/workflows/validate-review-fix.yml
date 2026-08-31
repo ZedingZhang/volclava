@@ -1,0 +1,65 @@
+name: Validate proposed review fix
+
+on:
+  push:
+    branches:
+      - validation/ubuntu-rpc-matrix
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["20.04", "22.04", "24.04"]
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prepare with the installer and build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./volcinstall.sh --setup=pre
+
+          if [ "${{ matrix.version }}" = "20.04" ]; then
+            test -f /usr/include/rpc/xdr.h
+            ! dpkg-query -W libtirpc-dev
+            ! dpkg-query -W libnsl-dev
+          else
+            test -f /usr/include/tirpc/rpc/xdr.h
+            dpkg-query -W libtirpc-dev
+            dpkg-query -W libnsl-dev
+          fi
+
+          ./bootstrap.sh --prefix=/tmp/volclava-install
+          make -j2
+          make check
+
+  rpm:
+    runs-on: ubuntu-latest
+    container: rockylinux:8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate versioned RPM metadata and build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dnf install -y dnf-plugins-core rpm-build make autoconf automake
+          dnf config-manager --set-enabled powertools
+
+          rhel7_deps=$(rpmspec --define 'rhel 7' -q --buildrequires spec/volclava.spec | awk '{print $1}')
+          ! grep -qx libtirpc-devel <<<"$rhel7_deps"
+          ! grep -qx libnsl2-devel <<<"$rhel7_deps"
+
+          test "$(rpm --eval '0%{?rhel}')" -eq 8
+          rhel8_deps=$(rpmspec -q --buildrequires spec/volclava.spec | awk '{print $1}')
+          grep -qx libtirpc-devel <<<"$rhel8_deps"
+          grep -qx libnsl2-devel <<<"$rhel8_deps"
+          dnf install -y $rhel8_deps
+
+          ./bootstrap.sh --prefix=/tmp/volclava-install
+          make -j2
+          make check
