@@ -1,0 +1,57 @@
+name: Validate Ubuntu RPC compatibility
+
+on:
+  push:
+    branches:
+      - validation/ubuntu-rpc-matrix
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["20.04", "22.04", "24.04"]
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare built-in and standalone RPC dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            build-essential autoconf automake tcl-dev libncurses-dev
+
+          ldd --version | head -n 1
+          dpkg-query -S /usr/include/rpc/xdr.h || true
+          dpkg-query -S /usr/include/tirpc/rpc/xdr.h || true
+
+          set +e
+          ./bootstrap.sh --prefix=/tmp/volclava-baseline >baseline.log 2>&1
+          baseline_status=$?
+          set -e
+          cat baseline.log
+
+          if [ "${{ matrix.version }}" = "20.04" ]; then
+            test "$baseline_status" -eq 0
+            grep -F "checking for rpc/xdr.h... yes" baseline.log
+            grep -F "checking for library containing xdrmem_create... none required" baseline.log
+            apt-get install -y --no-install-recommends libtirpc-dev
+          else
+            test "$baseline_status" -ne 0
+            grep -F "cannot build volclava: missing rpc/xdr.h" baseline.log
+            apt-get install -y --no-install-recommends libnsl-dev
+          fi
+
+          rm -f config.cache
+          ./bootstrap.sh --prefix=/tmp/volclava-standalone | tee standalone.log
+          grep -F "checking for rpc/xdr.h... yes" standalone.log
+          grep -F "checking for library containing xdrmem_create" standalone.log
+          grep -F "checking for yp_get_default_domain in -lnsl... yes" standalone.log
+          make -j2
+          make check
