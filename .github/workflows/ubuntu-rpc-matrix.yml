@@ -1,9 +1,7 @@
 name: Validate Ubuntu RPC compatibility
 
 on:
-  push:
-    branches:
-      - validation/ubuntu-rpc-matrix
+  workflow_dispatch:
 
 permissions:
   contents: read

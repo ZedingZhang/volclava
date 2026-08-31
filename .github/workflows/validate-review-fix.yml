@@ -22,6 +22,7 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
           ./volcinstall.sh --setup=pre
 
           if [ "${{ matrix.version }}" = "20.04" ]; then
