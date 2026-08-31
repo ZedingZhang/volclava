@@ -27,7 +27,8 @@ jobs:
           apt-get install -y --no-install-recommends \
             build-essential autoconf automake tcl-dev libncurses-dev
 
-          ldd --version | head -n 1
+          ldd --version >ldd-version.log
+          sed -n '1p' ldd-version.log
           dpkg-query -S /usr/include/rpc/xdr.h || true
           dpkg-query -S /usr/include/tirpc/rpc/xdr.h || true
 
