@@ -1,0 +1,38 @@
+name: Validate issue 118 host-list lifetime
+
+on:
+  push:
+    branches:
+      - validation/issue-118-submit-hosts
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    container: ubuntu:22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install build and memory-checking dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            build-essential autoconf automake bison flex tcl-dev libncurses-dev \
+            libtirpc-dev libnsl-dev valgrind
+      - name: Build Volclava
+        shell: bash
+        run: |
+          ./bootstrap.sh --prefix=/tmp/volclava-test CFLAGS='-g -O0 -ffunction-sections -fdata-sections'
+          make -j2
+      - name: Compare baseline and fixed request lifetimes
+        shell: bash
+        run: bash validation/run.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: issue-118-regression-results
+          path: validation/results/*.log
