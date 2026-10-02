@@ -2,7 +2,7 @@
 set -euo pipefail
 
 mkdir -p validation/results
-git show 35fd1684bf7222ea679013f662697884ff6ebffb:lsbatch/daemons/mbd.serv.c >validation/baseline-mbd.serv.c
+git -c safe.directory="$PWD" show 35fd1684bf7222ea679013f662697884ff6ebffb:lsbatch/daemons/mbd.serv.c >validation/baseline-mbd.serv.c
 
 compile() {
   local version="$1"
