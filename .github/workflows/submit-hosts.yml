@@ -14,15 +14,15 @@ jobs:
     container: ubuntu:22.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Install build and memory-checking dependencies
         run: |
           apt-get update
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            build-essential autoconf automake bison flex tcl-dev libncurses-dev \
+            git ca-certificates build-essential autoconf automake bison flex tcl-dev libncurses-dev \
             libtirpc-dev libnsl-dev valgrind
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Build Volclava
         shell: bash
         run: |
