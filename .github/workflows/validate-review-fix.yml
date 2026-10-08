@@ -1,0 +1,96 @@
+name: Validate RPC installer and RPM compatibility
+
+on:
+  push:
+    branches:
+      - validation/issue-90-rpc-20261008
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ["20.04", "22.04", "24.04"]
+    runs-on: ubuntu-latest
+    container: ubuntu:${{ matrix.version }}
+    timeout-minutes: 20
+    steps:
+      - name: Install checkout tools
+        shell: bash
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
+      - name: Reproduce missing RPC headers on baseline Ubuntu 24.04
+        if: matrix.version == '24.04'
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          git show 35fd1684bf7222ea679013f662697884ff6ebffb:volcinstall.sh > baseline-installer.sh
+          bash baseline-installer.sh --setup=pre
+          set +e
+          ./bootstrap.sh --prefix=/tmp/volclava-baseline > baseline.log 2>&1
+          baseline_status=$?
+          set -e
+          cat baseline.log
+          test "$baseline_status" -ne 0
+          grep -F "cannot build volclava: missing rpc/xdr.h" baseline.log
+      - name: Prepare with the revised installer and build
+        shell: bash
+        run: |
+          set -euxo pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          bash -n volcinstall.sh libinstall.sh
+          ./volcinstall.sh --setup=pre
+          if [ "${{ matrix.version }}" = "20.04" ]; then
+            test -f /usr/include/rpc/xdr.h
+            ! dpkg-query -W libtirpc-dev
+            ! dpkg-query -W libnsl-dev
+          else
+            test -f /usr/include/tirpc/rpc/xdr.h
+            dpkg-query -W libtirpc-dev
+            dpkg-query -W libnsl-dev
+          fi
+          rm -f config.cache
+          ./bootstrap.sh --prefix=/tmp/volclava-install | tee configure-result.log
+          grep -F "checking for rpc/xdr.h... yes" configure-result.log
+          grep -F "checking for yp_get_default_domain in -lnsl... yes" configure-result.log
+          make -j2
+          make check
+          sha256sum volcinstall.sh spec/volclava.spec debian/control
+
+  rpm:
+    runs-on: ubuntu-latest
+    container: rockylinux:8
+    timeout-minutes: 20
+    steps:
+      - name: Install checkout and RPM tools
+        run: dnf install -y git ca-certificates dnf-plugins-core rpm-build make autoconf automake
+      - uses: actions/checkout@v4
+      - name: Validate EL6/7/8 dependency selection and build on Rocky 8
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dnf config-manager --set-enabled powertools
+          for version in 6 7; do
+            old_deps=$(rpmspec --define "rhel $version" -q --buildrequires spec/volclava.spec | awk '{print $1}')
+            ! grep -qx libtirpc-devel <<<"$old_deps"
+            ! grep -qx libnsl2-devel <<<"$old_deps"
+          done
+          test "$(rpm --eval '0%{?rhel}')" -eq 8
+          deps=$(rpmspec -q --buildrequires spec/volclava.spec | awk '{print $1}')
+          grep -qx libtirpc-devel <<<"$deps"
+          grep -qx libnsl2-devel <<<"$deps"
+          dnf install -y $deps
+          ./bootstrap.sh --prefix=/tmp/volclava-install
+          make -j2
+          make check
+          sha256sum volcinstall.sh spec/volclava.spec debian/control
