@@ -27,7 +27,7 @@ jobs:
           apt-get install -y --no-install-recommends git ca-certificates
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 3
+          fetch-depth: 0
       - name: Reproduce missing RPC headers on baseline Ubuntu 24.04
         if: matrix.version == '24.04'
         shell: bash
