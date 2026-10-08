@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euxo pipefail
           export DEBIAN_FRONTEND=noninteractive
-          git show 35fd1684bf7222ea679013f662697884ff6ebffb:volcinstall.sh > baseline-installer.sh
+          git -c safe.directory="$PWD" show 35fd1684bf7222ea679013f662697884ff6ebffb:volcinstall.sh > baseline-installer.sh
           bash baseline-installer.sh --setup=pre
           set +e
           ./bootstrap.sh --prefix=/tmp/volclava-baseline > baseline.log 2>&1
@@ -43,6 +43,15 @@ jobs:
           cat baseline.log
           test "$baseline_status" -ne 0
           grep -F "cannot build volclava: missing rpc/xdr.h" baseline.log
+          apt-get install -y --no-install-recommends libtirpc-dev
+          rm -f config.cache
+          set +e
+          ./bootstrap.sh --prefix=/tmp/volclava-tirpc-only > tirpc-only.log 2>&1
+          tirpc_only_status=$?
+          set -e
+          cat tirpc-only.log
+          test "$tirpc_only_status" -ne 0
+          grep -F "configure: error: missing libnsl" tirpc-only.log
       - name: Prepare with the revised installer and build
         shell: bash
         run: |
@@ -62,6 +71,11 @@ jobs:
           rm -f config.cache
           ./bootstrap.sh --prefix=/tmp/volclava-install | tee configure-result.log
           grep -F "checking for rpc/xdr.h... yes" configure-result.log
+          if [ "${{ matrix.version }}" = "20.04" ]; then
+            grep -F "checking for library containing xdrmem_create... none required" configure-result.log
+          else
+            grep -F "checking for library containing xdrmem_create... -ltirpc" configure-result.log
+          fi
           grep -F "checking for yp_get_default_domain in -lnsl... yes" configure-result.log
           make -j2
           make check
